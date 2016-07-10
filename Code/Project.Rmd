@@ -1,0 +1,182 @@
+---
+title: "Coursera Practical Machine Learning Project"
+author: "Dinesh Daultani"
+date: "July 3, 2016"
+output: html_document
+abstract: |
+  There a lot of wearable devices today which are used to analyse the activities of humans. Some of those devices are Fitbit, Apple watch, Nike FuelBand etc. This devices help people to carefully monitor their activities and exercises to maintain their health. The given dataset contained some sensors measurements of 6 participants who have exercised barbell lifts correctly and incorrectly 5 times.
+  In this project, I have predicted the values of classe variable by analyzing through accuracy of various Machine learning algorithm preformance on the dataset.
+---
+
+## Loading libraries and datasets
+
+Loading Libraries used in the below code snippets
+```{r setup, results='hide'}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(caret)
+library(kernlab)
+```
+
+Loading Training and Testing dataset
+```{r}
+dataset <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+test_dataset <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+Setting seed for reproducibility
+```{r}
+set.seed(111)
+```
+
+## Analyzing the data
+
+Looking at the structure of the document
+```{r, results='hide', message = FALSE, warning = FALSE}
+## hidden in this document due to a lot of rows.
+str(dataset, list.len=ncol(dataset))
+dim(dataset)
+```
+There are total 19622 rows and 160 variables in the dataset.     
+
+
+## Preprocessing the dataset   
+
+Some of the columns need to be preprocessed since they have missing values and some also have garbage values. In few below steps I am going to remove those specific columns from the dataset which can be an issue while training the model.   
+
+Removing variables which were looking empty after analyzing the dataset.
+```{r}
+
+column_removed_ds <- subset(dataset, select = -c(kurtosis_yaw_belt,
+              skewness_yaw_belt, max_roll_belt, max_picth_belt,
+              min_roll_belt, min_pitch_belt, amplitude_roll_belt, 
+              amplitude_pitch_belt, var_total_accel_belt:var_yaw_belt,
+              var_accel_arm: var_yaw_arm, 
+              max_roll_arm:amplitude_yaw_arm, kurtosis_yaw_dumbbell,
+              skewness_yaw_dumbbell, max_roll_dumbbell,
+              max_picth_dumbbell,min_roll_dumbbell, min_pitch_dumbbell,               amplitude_roll_dumbbell,amplitude_pitch_dumbbell,
+              var_accel_dumbbell:var_yaw_dumbbell,skewness_yaw_forearm,
+              max_roll_forearm, max_picth_forearm, min_roll_forearm, 
+              min_pitch_forearm, amplitude_roll_forearm,
+              amplitude_pitch_forearm,
+              var_accel_forearm:var_yaw_forearm
+              
+              ) )
+
+```
+
+
+Removing columns raw timestamp variables columns whch are of no use for training the models.
+```{r}
+
+column_removed_ds <- subset(column_removed_ds, 
+                            select = -c(raw_timestamp_part_1,
+                            raw_timestamp_part_2))
+```
+
+Looking at the structure of the dataset again.   
+```{r, results='hide', message = FALSE, warning = FALSE}
+summary(column_removed_ds)
+```
+
+Still some column have some garbage values like "#DIV/0!" in their 'minimum', hence removing those columns as well.
+```{r, echo=FALSE}
+
+column_removed_ds <- subset(column_removed_ds, select = 
+                    -c(kurtosis_roll_belt:skewness_roll_belt.1,
+                     amplitude_yaw_belt, 
+                                 kurtosis_roll_arm:skewness_yaw_arm,
+                       kurtosis_roll_dumbbell,skewness_roll_dumbbell,
+                                 amplitude_yaw_dumbbell,                                kurtosis_roll_forearm:amplitude_yaw_forearm,
+                     max_yaw_belt, min_yaw_belt,
+              kurtosis_picth_dumbbell:min_yaw_dumbbell
+                                 ))
+```
+
+
+Some columns can create problems in training like user_name, timestamp etc. Hence removing those columns before training the model.
+```{r}
+## Removing extra columns
+column_removed_ds <- subset(column_removed_ds, select = 
+                              -c(X:num_window))
+
+```
+
+Variables used for training models are as follows:
+```{r}
+colnames(column_removed_ds)
+
+```
+
+## Data Splitting   
+
+Creating partitions of the dataset for training and testing purposes in 75:25 ratio.
+```{r}
+
+inTrain <- createDataPartition(y= column_removed_ds$classe,
+                               p=0.75, list = FALSE)
+training <- column_removed_ds[inTrain,]
+testing <- column_removed_ds[-inTrain,]
+
+```
+
+## Training the models   
+
+For training the models, first setting some parameters such as allowParallel for fast processing and splitting method as cross validation.
+```{r}
+
+fitControl <- trainControl(method = "repeatedcv", number = 10 , 
+                           repeats = 10, allowParallel=TRUE)
+
+```
+
+Now training different models based on various machine learning algorithms like Random forest, Linear discriminant analysis and Gradient Boosting Machine.
+```{r, warning=FALSE}
+modFitRF <- train(classe ~ ., method = "rf", data = training, 
+                trControl = fitControl)
+modFitLDA <- train(classe ~ ., method = "lda", data = training, 
+                trControl = fitControl)
+modFitGBM <- train(classe ~ ., method = "gbm", data = training, 
+                   trControl = fitControl, verbose = F)
+
+```
+
+## Checking the performance of the model
+
+Now calculating the accuracies and kappa values of the model by predicting the classe variable value on the testing splitted dataset.   
+```{r}
+predictRF <- predict(modFitRF, newdata = testing)  
+
+# Confusion Matrix showing the accuracy of Random forest alogorithm.
+
+confusionMatrix(predictRF, testing$classe)
+predictLDA <- predict(modFitLDA, newdata = testing)
+
+# Confusion Matrix showing the accuracy of Linear discriminant analysis alogorithm.
+confusionMatrix(predictLDA, testing$classe)
+
+predictGBM <- predict(modFitGBM, newdata = testing)
+
+# Confusion Matrix showing the accuracy of Gradient Boosting Machine alogorithm.
+confusionMatrix(predictGBM, testing$classe)
+
+```
+## Final predictions 
+
+Now, Based on accuracy values we can clearly see that Random forests model have highest accuracy percentage i.e. more than 99%. Hence choosing the random forest model to predict the classes of the cases given.
+```{r}
+
+## Taking only columns which are used for training. And removing the remaining irrelevant variables.
+test_dataset <-  test_dataset[,as.character(colnames(column_removed_ds[1:52]))]
+# Also adding a classe variable column in the dataset to predict the classes of the dataset.
+test_dataset["classe"] <- 0
+
+# Now Predicting the given case classe variable values
+predictCases <- predict(modFitRF, newdata = test_dataset)
+predictCases
+
+```
+
+
+
+## References:
+1. http://groupware.les.inf.puc-rio.br/har
